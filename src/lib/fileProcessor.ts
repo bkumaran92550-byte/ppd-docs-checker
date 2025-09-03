@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 export class FileProcessor {
   async compareFiles(leftFile: File, rightFile: File) {
@@ -56,12 +57,62 @@ export class FileProcessor {
   }
 
   private async processExcelFile(file: File): Promise<string[]> {
-    // For now, treat Excel files as text (placeholder for future XLSX library integration)
     try {
-      const text = await file.text();
-      return ['Excel file processing not fully implemented yet.', 'File name: ' + file.name, 'Size: ' + file.size + ' bytes'];
-    } catch {
-      return ['Unable to process Excel file: ' + file.name];
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      
+      const allSheetData: string[] = [];
+      
+      // Process each worksheet
+      workbook.SheetNames.forEach((sheetName, sheetIndex) => {
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Add sheet header
+        allSheetData.push(`=== WORKSHEET: ${sheetName} ===`);
+        
+        // Convert sheet to JSON to get structured data
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1, 
+          defval: '', 
+          raw: false 
+        }) as any[][];
+        
+        if (jsonData.length === 0) {
+          allSheetData.push('(Empty worksheet)');
+          allSheetData.push('');
+          return;
+        }
+        
+        // Process each row
+        jsonData.forEach((row, rowIndex) => {
+          if (Array.isArray(row)) {
+            // Create a formatted row showing cell positions and values
+            const formattedCells = row.map((cell, colIndex) => {
+              const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+              const cellValue = cell === null || cell === undefined ? '' : String(cell);
+              return cellValue ? `${cellRef}:${cellValue}` : '';
+            }).filter(cell => cell !== '');
+            
+            if (formattedCells.length > 0) {
+              allSheetData.push(`Row ${rowIndex + 1}: ${formattedCells.join(' | ')}`);
+            }
+          }
+        });
+        
+        // Add some spacing between sheets
+        if (sheetIndex < workbook.SheetNames.length - 1) {
+          allSheetData.push('');
+        }
+      });
+      
+      return allSheetData;
+    } catch (error) {
+      console.error('Error processing Excel file:', error);
+      return [
+        'Error processing Excel file: ' + (error as Error).message,
+        'File name: ' + file.name,
+        'Size: ' + file.size + ' bytes'
+      ];
     }
   }
 

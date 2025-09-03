@@ -2,6 +2,7 @@ import { ArrowLeft, Download, Eye } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DetailedDiffView } from "./DetailedDiffView";
+import { ExcelComparisonView } from "./ExcelComparisonView";
 import { useState } from "react";
 
 interface ComparisonViewProps {
@@ -31,6 +32,13 @@ interface ComparisonViewProps {
 
 export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
   const [showDetailedView, setShowDetailedView] = useState(false);
+
+  // Check if this is Excel content
+  const isExcelComparison = result.leftContent.some(line => 
+    line.includes('=== WORKSHEET:') || line.includes('Row ')
+  ) || result.rightContent.some(line => 
+    line.includes('=== WORKSHEET:') || line.includes('Row ')
+  );
 
   const exportResults = () => {
     const exportData = {
@@ -131,7 +139,11 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
             className="flex items-center gap-2"
           >
             <Eye className="w-4 h-4" />
-            {showDetailedView ? "Side-by-Side View" : "Detailed Changes"}
+            {showDetailedView 
+              ? "Side-by-Side View" 
+              : isExcelComparison 
+                ? "Excel Details" 
+                : "Detailed Changes"}
           </Button>
           <Button 
             onClick={exportResults}
@@ -168,12 +180,19 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
 
       {/* Comparison View */}
       {showDetailedView ? (
-        <DetailedDiffView differences={result.differences} />
+        isExcelComparison ? (
+          <ExcelComparisonView differences={result.differences} />
+        ) : (
+          <DetailedDiffView differences={result.differences} />
+        )
       ) : (
         <div className="grid lg:grid-cols-2 gap-6">
           <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
             <div className="p-4 bg-secondary/50 border-b border-border">
               <h4 className="font-semibold text-foreground">Original File</h4>
+              {isExcelComparison && (
+                <p className="text-xs text-muted-foreground mt-1">Excel worksheets and cell data</p>
+              )}
             </div>
             <div className="max-h-96 overflow-y-auto">
               {result.leftContent.map((line, index) => 
@@ -185,6 +204,9 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
           <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
             <div className="p-4 bg-secondary/50 border-b border-border">
               <h4 className="font-semibold text-foreground">Modified File</h4>
+              {isExcelComparison && (
+                <p className="text-xs text-muted-foreground mt-1">Excel worksheets and cell data</p>
+              )}
             </div>
             <div className="max-h-96 overflow-y-auto">
               {result.rightContent.map((line, index) => 
