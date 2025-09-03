@@ -92,6 +92,10 @@ export class FileProcessor {
       type: 'added' | 'removed' | 'modified';
       leftText?: string;
       rightText?: string;
+      wordDiffs?: Array<{
+        type: 'added' | 'removed' | 'unchanged';
+        text: string;
+      }>;
     }> = [];
 
     const maxLength = Math.max(leftLines.length, rightLines.length);
@@ -121,12 +125,14 @@ export class FileProcessor {
           });
           deletions++;
         } else {
-          // Line modified
+          // Line modified - perform word-level diff
+          const wordDiffs = this.getWordLevelDiff(leftLine, rightLine);
           differences.push({
             line: i,
             type: 'modified',
             leftText: leftLine,
-            rightText: rightLine
+            rightText: rightLine,
+            wordDiffs
           });
           modifications++;
         }
@@ -145,5 +151,37 @@ export class FileProcessor {
         modifications
       }
     };
+  }
+
+  private getWordLevelDiff(leftText: string, rightText: string) {
+    const leftWords = leftText.split(/(\s+)/);
+    const rightWords = rightText.split(/(\s+)/);
+    const diffs: Array<{
+      type: 'added' | 'removed' | 'unchanged';
+      text: string;
+    }> = [];
+
+    // Simple word-by-word comparison
+    const maxWords = Math.max(leftWords.length, rightWords.length);
+    
+    for (let i = 0; i < maxWords; i++) {
+      const leftWord = leftWords[i] || '';
+      const rightWord = rightWords[i] || '';
+
+      if (leftWord === rightWord) {
+        if (leftWord) {
+          diffs.push({ type: 'unchanged', text: leftWord });
+        }
+      } else {
+        if (leftWord) {
+          diffs.push({ type: 'removed', text: leftWord });
+        }
+        if (rightWord) {
+          diffs.push({ type: 'added', text: rightWord });
+        }
+      }
+    }
+
+    return diffs;
   }
 }

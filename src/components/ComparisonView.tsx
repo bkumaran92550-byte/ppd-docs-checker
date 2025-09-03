@@ -1,6 +1,8 @@
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Eye } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DetailedDiffView } from "./DetailedDiffView";
+import { useState } from "react";
 
 interface ComparisonViewProps {
   result: {
@@ -12,6 +14,10 @@ interface ComparisonViewProps {
       type: 'added' | 'removed' | 'modified';
       leftText?: string;
       rightText?: string;
+      wordDiffs?: Array<{
+        type: 'added' | 'removed' | 'unchanged';
+        text: string;
+      }>;
     }>;
     summary: {
       totalChanges: number;
@@ -24,6 +30,8 @@ interface ComparisonViewProps {
 }
 
 export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
+  const [showDetailedView, setShowDetailedView] = useState(false);
+
   const exportResults = () => {
     const exportData = {
       summary: result.summary,
@@ -43,20 +51,37 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     URL.revokeObjectURL(url);
   };
 
+  const renderWordDiffs = (wordDiffs: Array<{type: 'added' | 'removed' | 'unchanged'; text: string}>) => {
+    return wordDiffs.map((diff, index) => (
+      <span
+        key={index}
+        className={
+          diff.type === 'added'
+            ? "bg-success/30 text-success-foreground px-1 rounded"
+            : diff.type === 'removed'
+            ? "bg-destructive/30 text-destructive-foreground px-1 rounded line-through"
+            : ""
+        }
+      >
+        {diff.text}
+      </span>
+    ));
+  };
+
   const renderLine = (content: string, index: number, side: 'left' | 'right') => {
     const difference = result.differences.find(d => d.line === index);
-    let className = "p-2 border-l-4 ";
+    let className = "p-3 border-l-4 ";
 
     if (difference) {
       switch (difference.type) {
         case 'added':
-          className += side === 'right' ? "border-success bg-success/10" : "border-transparent";
+          className += side === 'right' ? "border-success bg-success/5" : "border-transparent bg-muted/30";
           break;
         case 'removed':
-          className += side === 'left' ? "border-destructive bg-destructive/10" : "border-transparent";
+          className += side === 'left' ? "border-destructive bg-destructive/5" : "border-transparent bg-muted/30";
           break;
         case 'modified':
-          className += "border-warning bg-warning/10";
+          className += "border-warning bg-warning/5";
           break;
         default:
           className += "border-transparent";
@@ -67,16 +92,29 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
 
     return (
       <div key={index} className={className}>
-        <span className="text-xs text-muted-foreground mr-4">{index + 1}</span>
-        <span className="font-mono text-sm">{content}</span>
+        <div className="flex items-start gap-4">
+          <span className="text-xs text-muted-foreground mt-1 w-8 flex-shrink-0">{index + 1}</span>
+          <div className="font-mono text-sm flex-1 break-words">
+            {difference && difference.type === 'modified' && difference.wordDiffs ? (
+              renderWordDiffs(difference.wordDiffs)
+            ) : (
+              <span>{content}</span>
+            )}
+          </div>
+        </div>
+        {difference && difference.type === 'modified' && (
+          <div className="mt-2 text-xs text-muted-foreground ml-12">
+            {side === 'left' ? "Original" : "Modified"} • {difference.type}
+          </div>
+        )}
       </div>
     );
   };
 
   return (
     <div className="space-y-6">
-      {/* Header with back button and summary */}
-      <div className="flex items-center justify-between">
+      {/* Header with back button and actions */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <Button 
           variant="outline" 
           onClick={onReset}
@@ -86,13 +124,23 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
           Back to Upload
         </Button>
         
-        <Button 
-          onClick={exportResults}
-          className="flex items-center gap-2 bg-gradient-primary"
-        >
-          <Download className="w-4 h-4" />
-          Export Report
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline"
+            onClick={() => setShowDetailedView(!showDetailedView)}
+            className="flex items-center gap-2"
+          >
+            <Eye className="w-4 h-4" />
+            {showDetailedView ? "Side-by-Side View" : "Detailed Changes"}
+          </Button>
+          <Button 
+            onClick={exportResults}
+            className="flex items-center gap-2 bg-gradient-primary"
+          >
+            <Download className="w-4 h-4" />
+            Export Report
+          </Button>
+        </div>
       </div>
 
       {/* Summary Card */}
@@ -118,30 +166,34 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
         </div>
       </Card>
 
-      {/* Side-by-side comparison */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
-          <div className="p-4 bg-secondary/50 border-b border-border">
-            <h4 className="font-semibold text-foreground">Original File</h4>
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            {result.leftContent.map((line, index) => 
-              renderLine(line, index, 'left')
-            )}
-          </div>
-        </Card>
+      {/* Comparison View */}
+      {showDetailedView ? (
+        <DetailedDiffView differences={result.differences} />
+      ) : (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
+            <div className="p-4 bg-secondary/50 border-b border-border">
+              <h4 className="font-semibold text-foreground">Original File</h4>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {result.leftContent.map((line, index) => 
+                renderLine(line, index, 'left')
+              )}
+            </div>
+          </Card>
 
-        <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
-          <div className="p-4 bg-secondary/50 border-b border-border">
-            <h4 className="font-semibold text-foreground">Modified File</h4>
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            {result.rightContent.map((line, index) => 
-              renderLine(line, index, 'right')
-            )}
-          </div>
-        </Card>
-      </div>
+          <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
+            <div className="p-4 bg-secondary/50 border-b border-border">
+              <h4 className="font-semibold text-foreground">Modified File</h4>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {result.rightContent.map((line, index) => 
+                renderLine(line, index, 'right')
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Legend */}
       <Card className="p-4 bg-gradient-card border-border shadow-card">
