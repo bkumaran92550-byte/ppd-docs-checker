@@ -44,11 +44,8 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="text-center space-y-4">
             <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Document Comparator
+              PPD DOCS CHECKER
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Compare documents, spreadsheets, and images with precision. Upload two files to see their differences highlighted side-by-side.
-            </p>
           </div>
         </div>
       </header>
