@@ -1,9 +1,10 @@
 import { ArrowLeft, Download, Eye } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { DetailedDiffView } from "./DetailedDiffView";
 import { ExcelComparisonView } from "./ExcelComparisonView";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 
 interface ComparisonViewProps {
   result: {
@@ -32,6 +33,8 @@ interface ComparisonViewProps {
 
 export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
   const [showDetailedView, setShowDetailedView] = useState(false);
+  const leftScrollRef = useRef<HTMLDivElement>(null);
+  const rightScrollRef = useRef<HTMLDivElement>(null);
 
   // Check if this is Excel content
   const isExcelComparison = result.leftContent.some(line => 
@@ -59,16 +62,47 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     URL.revokeObjectURL(url);
   };
 
-  const renderWordDiffs = (wordDiffs: Array<{type: 'added' | 'removed' | 'unchanged'; text: string}>) => {
+  // Synchronized scrolling handler
+  const handleScroll = useCallback((source: 'left' | 'right') => (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    const otherRef = source === 'left' ? rightScrollRef : leftScrollRef;
+    
+    if (otherRef.current) {
+      otherRef.current.scrollTop = scrollTop;
+    }
+  }, []);
+
+  // Filter to only show lines with differences
+  const getDifferenceLines = () => {
+    const differenceSet = new Set(result.differences.map(d => d.line));
+    const maxLines = Math.max(result.leftContent.length, result.rightContent.length);
+    const filteredLines = [];
+    
+    for (let i = 0; i < maxLines; i++) {
+      if (differenceSet.has(i)) {
+        filteredLines.push({
+          index: i,
+          leftContent: result.leftContent[i] || '',
+          rightContent: result.rightContent[i] || ''
+        });
+      }
+    }
+    
+    return filteredLines;
+  };
+
+  const renderWordDiffs = (wordDiffs: Array<{type: 'added' | 'removed' | 'unchanged'; text: string}>, showCorrections: boolean = false) => {
     return wordDiffs.map((diff, index) => (
       <span
         key={index}
         className={
-          diff.type === 'added'
-            ? "bg-success/30 text-success-foreground px-1 rounded"
-            : diff.type === 'removed'
-            ? "bg-destructive/30 text-destructive-foreground px-1 rounded line-through"
-            : ""
+          showCorrections ? (
+            diff.type === 'added'
+              ? "bg-success/30 text-success-foreground px-1 rounded"
+              : diff.type === 'removed'
+              ? "bg-destructive/30 text-destructive-foreground px-1 rounded line-through"
+              : ""
+          ) : ""
         }
       >
         {diff.text}
@@ -76,20 +110,20 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     ));
   };
 
-  const renderLine = (content: string, index: number, side: 'left' | 'right') => {
-    const difference = result.differences.find(d => d.line === index);
+  const renderLine = (content: string, actualIndex: number, side: 'left' | 'right', displayIndex: number) => {
+    const difference = result.differences.find(d => d.line === actualIndex);
     let className = "p-3 border-l-4 ";
 
     if (difference) {
       switch (difference.type) {
         case 'added':
-          className += side === 'right' ? "border-success bg-success/5" : "border-transparent bg-muted/30";
+          className += side === 'right' ? "border-success bg-success/5" : "border-transparent";
           break;
         case 'removed':
-          className += side === 'left' ? "border-destructive bg-destructive/5" : "border-transparent bg-muted/30";
+          className += side === 'left' ? "border-destructive bg-destructive/5" : "border-transparent";
           break;
         case 'modified':
-          className += "border-warning bg-warning/5";
+          className += side === 'right' ? "border-warning bg-warning/5" : "border-transparent";
           break;
         default:
           className += "border-transparent";
@@ -99,12 +133,12 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     }
 
     return (
-      <div key={index} className={className}>
+      <div key={actualIndex} className={className}>
         <div className="flex items-start gap-4">
-          <span className="text-xs text-muted-foreground mt-1 w-8 flex-shrink-0">{index + 1}</span>
+          <span className="text-xs text-muted-foreground mt-1 w-8 flex-shrink-0">{actualIndex + 1}</span>
           <div className="font-mono text-sm flex-1 break-words">
-            {difference && difference.type === 'modified' && difference.wordDiffs ? (
-              renderWordDiffs(difference.wordDiffs)
+            {difference && difference.type === 'modified' && difference.wordDiffs && side === 'right' ? (
+              renderWordDiffs(difference.wordDiffs, true)
             ) : (
               <span>{content}</span>
             )}
@@ -186,33 +220,45 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
           <DetailedDiffView differences={result.differences} />
         )
       ) : (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
-            <div className="p-4 bg-secondary/50 border-b border-border">
+        <div className="grid lg:grid-cols-2 gap-0 border border-border rounded-lg overflow-hidden bg-gradient-card shadow-card">
+          <Card className="border-0 rounded-none border-r border-border">
+            <div className="p-4 bg-secondary/30 border-b border-border">
               <h4 className="font-semibold text-foreground">Original File</h4>
               {isExcelComparison && (
                 <p className="text-xs text-muted-foreground mt-1">Excel worksheets and cell data</p>
               )}
             </div>
-            <div className="max-h-96 overflow-y-auto">
-              {result.leftContent.map((line, index) => 
-                renderLine(line, index, 'left')
-              )}
-            </div>
+            <ScrollArea className="h-96">
+              <div 
+                className="overflow-y-auto h-full" 
+                onScroll={handleScroll('left')}
+                ref={leftScrollRef}
+              >
+                {getDifferenceLines().map(({ index, leftContent }, displayIndex) => 
+                  renderLine(leftContent, index, 'left', displayIndex)
+                )}
+              </div>
+            </ScrollArea>
           </Card>
 
-          <Card className="bg-gradient-card border-border shadow-card overflow-hidden">
-            <div className="p-4 bg-secondary/50 border-b border-border">
+          <Card className="border-0 rounded-none">
+            <div className="p-4 bg-secondary/30 border-b border-border">
               <h4 className="font-semibold text-foreground">Modified File</h4>
               {isExcelComparison && (
                 <p className="text-xs text-muted-foreground mt-1">Excel worksheets and cell data</p>
               )}
             </div>
-            <div className="max-h-96 overflow-y-auto">
-              {result.rightContent.map((line, index) => 
-                renderLine(line, index, 'right')
-              )}
-            </div>
+            <ScrollArea className="h-96">
+              <div 
+                className="overflow-y-auto h-full" 
+                onScroll={handleScroll('right')}
+                ref={rightScrollRef}
+              >
+                {getDifferenceLines().map(({ index, rightContent }, displayIndex) => 
+                  renderLine(rightContent, index, 'right', displayIndex)
+                )}
+              </div>
+            </ScrollArea>
           </Card>
         </div>
       )}
