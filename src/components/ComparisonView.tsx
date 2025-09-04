@@ -62,7 +62,7 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     const timestamp = new Date().toISOString();
 
     if (isExcelComparison) {
-      // Build an Excel workbook with Summary and Differences
+      // Build an Excel workbook with Summary, Original, Modified, and Differences
       const wb = XLSX.utils.book_new();
 
       const summaryData = [
@@ -76,7 +76,18 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-      const diffHeader = ["Line", "Type", "Original", "Modified"];
+      // Original file content
+      const originalData = [["Line", "Content"], ...result.leftContent.map((line, index) => [index + 1, line])];
+      const wsOriginal = XLSX.utils.aoa_to_sheet(originalData);
+      XLSX.utils.book_append_sheet(wb, wsOriginal, 'Original File');
+
+      // Modified file content
+      const modifiedData = [["Line", "Content"], ...result.rightContent.map((line, index) => [index + 1, line])];
+      const wsModified = XLSX.utils.aoa_to_sheet(modifiedData);
+      XLSX.utils.book_append_sheet(wb, wsModified, 'Modified File');
+
+      // Differences with detailed info
+      const diffHeader = ["Line", "Type", "Original Text", "Modified Text"];
       const diffRows = result.differences.map((d) => [
         d.line + 1,
         d.type,
@@ -91,15 +102,17 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `comparison-report-${Date.now()}.xlsx`;
+      a.download = `ppd-docs-checker-report-${Date.now()}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
       return;
     }
 
-    // Default JSON export for non-Excel inputs
+    // For text/CSV files, export with full content
     const exportData = {
       summary: result.summary,
+      originalFile: result.leftContent,
+      modifiedFile: result.rightContent,
       differences: result.differences,
       timestamp,
     };
@@ -111,7 +124,7 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `comparison-report-${Date.now()}.json`;
+    a.download = `ppd-docs-checker-report-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -287,10 +300,9 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
                 <p className="text-xs text-muted-foreground mt-1">Excel worksheets and cell data</p>
               )}
             </div>
-            <div className="h-96">
+            <div className="h-96 overflow-hidden">
               <div 
-                className="overflow-y-auto h-full"
-                onScroll={handleScroll('left')}
+                className="h-full overflow-hidden"
                 ref={leftScrollRef}
               >
                 {getDifferenceLines().map(({ index, leftContent }, displayIndex) => 
@@ -300,13 +312,12 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
             </div>
           </Card>
 
-          {/* Middle synchronized scrollbar */}
-          <div className="w-4 bg-card border-x border-border hidden md:block">
+          {/* Middle scrollbar controls both sides */}
+          <div className="w-6 bg-muted border-x border-border flex-shrink-0">
             <div
-              className="h-96 overflow-y-scroll"
+              className="h-96 overflow-y-scroll scrollbar-thin"
               onScroll={handleScroll('middle')}
               ref={middleScrollRef}
-              style={{ scrollbarWidth: 'thin' }}
             >
               <div style={{ height: middleHeight || 1 }} />
             </div>
@@ -319,10 +330,9 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
                 <p className="text-xs text-muted-foreground mt-1">Excel worksheets and cell data</p>
               )}
             </div>
-            <div className="h-96">
+            <div className="h-96 overflow-hidden">
               <div 
-                className="overflow-y-auto h-full"
-                onScroll={handleScroll('right')}
+                className="h-full overflow-hidden"
                 ref={rightScrollRef}
               >
                 {getDifferenceLines().map(({ index, rightContent }, displayIndex) => 
