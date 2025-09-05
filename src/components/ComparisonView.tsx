@@ -97,6 +97,17 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
       const wsDiff = XLSX.utils.aoa_to_sheet([diffHeader, ...diffRows]);
       XLSX.utils.book_append_sheet(wb, wsDiff, 'Differences');
 
+      // Side-by-Side comparison (only changed lines)
+      const sideBySideHeader = ["Line", "Change Type", "Original", "Modified"];
+      const sideBySideRows = result.differences.map((d) => [
+        d.line + 1,
+        d.type,
+        result.leftContent[d.line] ?? d.leftText ?? '',
+        result.rightContent[d.line] ?? d.rightText ?? ''
+      ]);
+      const wsSideBySide = XLSX.utils.aoa_to_sheet([sideBySideHeader, ...sideBySideRows]);
+      XLSX.utils.book_append_sheet(wb, wsSideBySide, 'Side-by-Side');
+
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
@@ -302,7 +313,8 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
             </div>
             <div className="h-96 overflow-hidden">
               <div 
-                className="h-full overflow-hidden"
+                className="h-full overflow-y-auto no-scrollbar"
+                onScroll={handleScroll('left')}
                 ref={leftScrollRef}
               >
                 {getDifferenceLines().map(({ index, leftContent }, displayIndex) => 
@@ -332,7 +344,8 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
             </div>
             <div className="h-96 overflow-hidden">
               <div 
-                className="h-full overflow-hidden"
+                className="h-full overflow-y-auto no-scrollbar"
+                onScroll={handleScroll('right')}
                 ref={rightScrollRef}
               >
                 {getDifferenceLines().map(({ index, rightContent }, displayIndex) => 
@@ -344,22 +357,6 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
         </div>
       )}
 
-      <Card className="p-4 bg-gradient-card border-border shadow-card">
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-l-4 border-success bg-success/10"></div>
-            <span className="text-muted-foreground">Added Lines (shown on right only)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-l-4 border-destructive bg-destructive/10"></div>
-            <span className="text-muted-foreground">Removed Lines (shown on right only)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-l-4 border-warning bg-warning/10"></div>
-            <span className="text-muted-foreground">Modified Lines (shown on right only)</span>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 };
