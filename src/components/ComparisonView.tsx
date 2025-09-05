@@ -62,9 +62,10 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     const timestamp = new Date().toISOString();
 
     if (isExcelComparison) {
-      // Build an Excel workbook with Summary, Original, Modified, and Differences
+      // Build an Excel workbook with only Summary and Differences sheets
       const wb = XLSX.utils.book_new();
 
+      // Summary sheet with coloring  
       const summaryData = [
         ["PPD DOCS CHECKER Report"],
         ["Generated", timestamp],
@@ -74,19 +75,31 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
         ["Modifications", result.summary.modifications],
       ];
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      
+      // Style the summary sheet header
+      if (wsSummary['A1']) {
+        wsSummary['A1'].s = { 
+          font: { bold: true, color: { rgb: "FFFFFF" }, size: 14 }, 
+          fill: { fgColor: { rgb: "4F46E5" } },
+          alignment: { horizontal: "center" }
+        };
+      }
+      
+      // Style metric labels
+      ['A3', 'A4', 'A5', 'A6'].forEach(cell => {
+        if (wsSummary[cell]) {
+          wsSummary[cell].s = { font: { bold: true } };
+        }
+      });
+      
+      // Color-code the values based on type
+      if (wsSummary['B4']) wsSummary['B4'].s = { fill: { fgColor: { rgb: "C7F6C7" } } }; // Green for additions
+      if (wsSummary['B5']) wsSummary['B5'].s = { fill: { fgColor: { rgb: "FFB3B3" } } }; // Red for deletions  
+      if (wsSummary['B6']) wsSummary['B6'].s = { fill: { fgColor: { rgb: "FFE4B3" } } }; // Orange for modifications
+
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-      // Original file content
-      const originalData = [["Line", "Content"], ...result.leftContent.map((line, index) => [index + 1, line])];
-      const wsOriginal = XLSX.utils.aoa_to_sheet(originalData);
-      XLSX.utils.book_append_sheet(wb, wsOriginal, 'Original File');
-
-      // Modified file content
-      const modifiedData = [["Line", "Content"], ...result.rightContent.map((line, index) => [index + 1, line])];
-      const wsModified = XLSX.utils.aoa_to_sheet(modifiedData);
-      XLSX.utils.book_append_sheet(wb, wsModified, 'Modified File');
-
-      // Differences with detailed info
+      // Differences sheet with coloring
       const diffHeader = ["Line", "Type", "Original Text", "Modified Text"];
       const diffRows = result.differences.map((d) => [
         d.line + 1,
@@ -95,18 +108,54 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
         d.rightText || ''
       ]);
       const wsDiff = XLSX.utils.aoa_to_sheet([diffHeader, ...diffRows]);
+      
+      // Style the differences sheet
+      const range = XLSX.utils.decode_range(wsDiff['!ref'] || 'A1');
+      
+      // Style header row
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (wsDiff[cellAddress]) {
+          wsDiff[cellAddress].s = { 
+            font: { bold: true, color: { rgb: "FFFFFF" } }, 
+            fill: { fgColor: { rgb: "4F46E5" } },
+            alignment: { horizontal: "center" }
+          };
+        }
+      }
+      
+      // Style data rows based on change type
+      for (let row = 1; row <= range.e.r; row++) {
+        const changeTypeCell = wsDiff[XLSX.utils.encode_cell({ r: row, c: 1 })];
+        if (changeTypeCell) {
+          const changeType = changeTypeCell.v;
+          let fillColor = '';
+          
+          switch (changeType) {
+            case 'added':
+              fillColor = 'C7F6C7'; // Light green
+              break;
+            case 'removed':
+              fillColor = 'FFB3B3'; // Light red
+              break;
+            case 'modified':
+              fillColor = 'FFE4B3'; // Light orange
+              break;
+          }
+          
+          // Apply color to all cells in the row
+          for (let col = range.s.c; col <= range.e.c; col++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+            if (wsDiff[cellAddress]) {
+              wsDiff[cellAddress].s = { 
+                fill: { fgColor: { rgb: fillColor } } 
+              };
+            }
+          }
+        }
+      }
+      
       XLSX.utils.book_append_sheet(wb, wsDiff, 'Differences');
-
-      // Side-by-Side comparison (only changed lines)
-      const sideBySideHeader = ["Line", "Change Type", "Original", "Modified"];
-      const sideBySideRows = result.differences.map((d) => [
-        d.line + 1,
-        d.type,
-        result.leftContent[d.line] ?? d.leftText ?? '',
-        result.rightContent[d.line] ?? d.rightText ?? ''
-      ]);
-      const wsSideBySide = XLSX.utils.aoa_to_sheet([sideBySideHeader, ...sideBySideRows]);
-      XLSX.utils.book_append_sheet(wb, wsSideBySide, 'Side-by-Side');
 
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
