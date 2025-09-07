@@ -109,15 +109,18 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
           cell.font = { color: { argb: 'FF000000' } } as any; // Black text
         });
         
-        // Show original and modified values on separate lines
-        if (d.type === 'modified' && d.leftText && d.rightText) {
-          const richText = [
-            { text: d.leftText, font: { color: { argb: 'FF000000' } } },
-            { text: '\n', font: { color: { argb: 'FF000000' } } },
-            { text: d.rightText, font: { color: { argb: 'FFCC0000' }, bold: true } }
-          ];
+        // Rich text highlighting for modified parts (strikethrough + colored) in Modified Text column
+        if (d.type === 'modified' && d.wordDiffs && d.wordDiffs.length) {
+          const richText = d.wordDiffs.map(seg => {
+            if (seg.type === 'unchanged') {
+              return { text: seg.text, font: { color: { argb: 'FF000000' } } };
+            } else if (seg.type === 'removed') {
+              return { text: seg.text, font: { color: { argb: 'FFCC0000' }, strike: true } };
+            } else { // added
+              return { text: seg.text, font: { color: { argb: 'FF006600' }, bold: true } };
+            }
+          });
           wsDiff.getCell(row.number, 4).value = { richText } as any;
-          wsDiff.getCell(row.number, 4).alignment = { wrapText: true, vertical: 'top' } as any;
         }
       });
 
