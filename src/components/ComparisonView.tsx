@@ -109,12 +109,11 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
           cell.font = { color: { argb: 'FF000000' } } as any; // Black text
         });
         
-        // Format Modified Text column with Original/Modified labels
+        // Show original and modified values on separate lines
         if (d.type === 'modified' && d.leftText && d.rightText) {
           const richText = [
-            { text: 'Original: ', font: { color: { argb: 'FF000000' }, bold: true } },
             { text: d.leftText, font: { color: { argb: 'FF000000' } } },
-            { text: '\nModified: ', font: { color: { argb: 'FF000000' }, bold: true } },
+            { text: '\n', font: { color: { argb: 'FF000000' } } },
             { text: d.rightText, font: { color: { argb: 'FFCC0000' }, bold: true } }
           ];
           wsDiff.getCell(row.number, 4).value = { richText } as any;
