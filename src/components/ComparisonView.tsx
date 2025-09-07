@@ -130,16 +130,20 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
         if (changeTypeCell) {
           const changeType = changeTypeCell.v;
           let fillColor = '';
+          let fontColor = '000000'; // Default black
           
           switch (changeType) {
             case 'added':
               fillColor = 'C7F6C7'; // Light green
+              fontColor = '006600'; // Dark green text
               break;
             case 'removed':
               fillColor = 'FFB3B3'; // Light red
+              fontColor = 'CC0000'; // Dark red text
               break;
             case 'modified':
               fillColor = 'FFE4B3'; // Light orange
+              fontColor = 'CC0000'; // Red text for modifications
               break;
           }
           
@@ -148,7 +152,8 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
             const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
             if (wsDiff[cellAddress]) {
               wsDiff[cellAddress].s = { 
-                fill: { fgColor: { rgb: fillColor } } 
+                fill: { fgColor: { rgb: fillColor } },
+                font: { color: { rgb: fontColor }, bold: changeType === 'modified' }
               };
             }
           }
