@@ -100,24 +100,19 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
         cell.alignment = { horizontal: 'center' } as any;
       });
 
-      const typeFill = {
-        added: { fgColor: { argb: 'FFC7F6C7' }, font: { color: { argb: 'FF006600' } } },
-        removed: { fgColor: { argb: 'FFFFB3B3' }, font: { color: { argb: 'FFCC0000' } } },
-        modified: { fgColor: { argb: 'FFFFE4B3' }, font: { color: { argb: 'FFCC0000' } } },
-      } as const;
-
       result.differences.forEach(d => {
         const row = wsDiff.addRow([d.line + 1, d.type, d.leftText || '', d.rightText || '']);
-        const colors = typeFill[d.type as 'added'|'removed'|'modified'];
+        
+        // Set all text to black by default
         row.eachCell((cell, colNumber) => {
           if (row.number === 1) return; // skip header
-          cell.fill = { type:'pattern', pattern:'solid', fgColor: colors.fgColor } as any;
-          if (colNumber !== 4) cell.font = { ...(cell.font||{}), ...(colors.font) } as any;
+          cell.font = { color: { argb: 'FF000000' } } as any; // Black text
         });
+        
         // Rich text highlighting for modified parts (red + bold) in Modified Text column
         if (d.type === 'modified' && d.wordDiffs && d.wordDiffs.length) {
           const richText = d.wordDiffs.map(seg => {
-            if (seg.type === 'unchanged') return { text: seg.text };
+            if (seg.type === 'unchanged') return { text: seg.text, font: { color: { argb: 'FF000000' } } };
             return { text: seg.text, font: { color: { argb: 'FFCC0000' }, bold: true } };
           });
           wsDiff.getCell(row.number, 4).value = { richText } as any;
