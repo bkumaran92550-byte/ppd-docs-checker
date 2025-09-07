@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DetailedDiffView } from "./DetailedDiffView";
 import { ExcelComparisonView } from "./ExcelComparisonView";
 import { useState, useRef, useCallback, useEffect } from "react";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 interface ComparisonViewProps {
   result: {
@@ -58,112 +58,77 @@ export const ComparisonView = ({ result, onReset }: ComparisonViewProps) => {
     line.includes('=== WORKSHEET:') || line.includes('Row ')
   );
 
-  const exportResults = () => {
+  const exportResults = async () => {
     const timestamp = new Date().toISOString();
 
     if (isExcelComparison) {
       // Build an Excel workbook with only Summary and Differences sheets
-      const wb = XLSX.utils.book_new();
+      // Build an Excel workbook with only Summary and Differences sheets using ExcelJS
+      const wb = new ExcelJS.Workbook();
 
-      // Summary sheet with coloring  
+      // Summary sheet with coloring
+      const wsSummary = wb.addWorksheet('Summary');
       const summaryData = [
-        ["PPD DOCS CHECKER Report"],
-        ["Generated", timestamp],
-        ["Total Changes", result.summary.totalChanges],
-        ["Additions", result.summary.additions],
-        ["Deletions", result.summary.deletions],
-        ["Modifications", result.summary.modifications],
+        ['PPD DOCS CHECKER Report'],
+        ['Generated', timestamp],
+        ['Total Changes', result.summary.totalChanges],
+        ['Additions', result.summary.additions],
+        ['Deletions', result.summary.deletions],
+        ['Modifications', result.summary.modifications],
       ];
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      
-      // Style the summary sheet header
-      if (wsSummary['A1']) {
-        wsSummary['A1'].s = { 
-          font: { bold: true, color: { rgb: "FFFFFF" }, size: 14 }, 
-          fill: { fgColor: { rgb: "4F46E5" } },
-          alignment: { horizontal: "center" }
-        };
-      }
-      
-      // Style metric labels
-      ['A3', 'A4', 'A5', 'A6'].forEach(cell => {
-        if (wsSummary[cell]) {
-          wsSummary[cell].s = { font: { bold: true } };
-        }
-      });
-      
-      // Color-code the values based on type
-      if (wsSummary['B4']) wsSummary['B4'].s = { fill: { fgColor: { rgb: "C7F6C7" } } }; // Green for additions
-      if (wsSummary['B5']) wsSummary['B5'].s = { fill: { fgColor: { rgb: "FFB3B3" } } }; // Red for deletions  
-      if (wsSummary['B6']) wsSummary['B6'].s = { fill: { fgColor: { rgb: "FFE4B3" } } }; // Orange for modifications
-
-      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+      wsSummary.addRows(summaryData);
+      // Header style
+      const sA1 = wsSummary.getCell('A1');
+      sA1.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+      sA1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+      sA1.alignment = { horizontal: 'center' };
+      // Bold labels
+      ['A3','A4','A5','A6'].forEach(addr => { const c = wsSummary.getCell(addr); c.font = { ...(c.font||{}), bold: true } as any; });
+      // Color values
+      wsSummary.getCell('B4').fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFC7F6C7' } } as any; // Additions
+      wsSummary.getCell('B5').fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFB3B3' } } as any; // Deletions
+      wsSummary.getCell('B6').fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFE4B3' } } as any; // Modifications
 
       // Differences sheet with coloring
-      const diffHeader = ["Line", "Type", "Original Text", "Modified Text"];
-      const diffRows = result.differences.map((d) => [
-        d.line + 1,
-        d.type,
-        d.leftText || '',
-        d.rightText || ''
-      ]);
-      const wsDiff = XLSX.utils.aoa_to_sheet([diffHeader, ...diffRows]);
-      
-      // Style the differences sheet
-      const range = XLSX.utils.decode_range(wsDiff['!ref'] || 'A1');
-      
-      // Style header row
-      for (let col = range.s.c; col <= range.e.c; col++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
-        if (wsDiff[cellAddress]) {
-          wsDiff[cellAddress].s = { 
-            font: { bold: true, color: { rgb: "FFFFFF" } }, 
-            fill: { fgColor: { rgb: "4F46E5" } },
-            alignment: { horizontal: "center" }
-          };
-        }
-      }
-      
-      // Style data rows based on change type
-      for (let row = 1; row <= range.e.r; row++) {
-        const changeTypeCell = wsDiff[XLSX.utils.encode_cell({ r: row, c: 1 })];
-        if (changeTypeCell) {
-          const changeType = changeTypeCell.v;
-          let fillColor = '';
-          let fontColor = '000000'; // Default black
-          
-          switch (changeType) {
-            case 'added':
-              fillColor = 'C7F6C7'; // Light green
-              fontColor = '006600'; // Dark green text
-              break;
-            case 'removed':
-              fillColor = 'FFB3B3'; // Light red
-              fontColor = 'CC0000'; // Dark red text
-              break;
-            case 'modified':
-              fillColor = 'FFE4B3'; // Light orange
-              fontColor = 'CC0000'; // Red text for modifications
-              break;
-          }
-          
-          // Apply color to all cells in the row
-          for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-            if (wsDiff[cellAddress]) {
-              wsDiff[cellAddress].s = { 
-                fill: { fgColor: { rgb: fillColor } },
-                font: { color: { rgb: fontColor }, bold: changeType === 'modified' }
-              };
-            }
-          }
-        }
-      }
-      
-      XLSX.utils.book_append_sheet(wb, wsDiff, 'Differences');
+      const wsDiff = wb.addWorksheet('Differences');
+      const diffHeader = ['Line','Type','Original Text','Modified Text'];
+      wsDiff.addRow(diffHeader);
+      // Header style
+      wsDiff.getRow(1).eachCell(cell => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } } as any;
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF4F46E5' } } as any;
+        cell.alignment = { horizontal: 'center' } as any;
+      });
 
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const typeFill = {
+        added: { fgColor: { argb: 'FFC7F6C7' }, font: { color: { argb: 'FF006600' } } },
+        removed: { fgColor: { argb: 'FFFFB3B3' }, font: { color: { argb: 'FFCC0000' } } },
+        modified: { fgColor: { argb: 'FFFFE4B3' }, font: { color: { argb: 'FFCC0000' } } },
+      } as const;
+
+      result.differences.forEach(d => {
+        const row = wsDiff.addRow([d.line + 1, d.type, d.leftText || '', d.rightText || '']);
+        const colors = typeFill[d.type as 'added'|'removed'|'modified'];
+        row.eachCell((cell, colNumber) => {
+          if (row.number === 1) return; // skip header
+          cell.fill = { type:'pattern', pattern:'solid', fgColor: colors.fgColor } as any;
+          if (colNumber !== 4) cell.font = { ...(cell.font||{}), ...(colors.font) } as any;
+        });
+        // Rich text highlighting for modified parts (red + bold) in Modified Text column
+        if (d.type === 'modified' && d.wordDiffs && d.wordDiffs.length) {
+          const richText = d.wordDiffs.map(seg => {
+            if (seg.type === 'unchanged') return { text: seg.text };
+            return { text: seg.text, font: { color: { argb: 'FFCC0000' }, bold: true } };
+          });
+          wsDiff.getCell(row.number, 4).value = { richText } as any;
+        }
+      });
+
+      // Auto width
+      [1,2,3,4].forEach(i => { wsDiff.getColumn(i).width = 30; });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
